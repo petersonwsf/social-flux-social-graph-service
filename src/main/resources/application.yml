@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: social-graph-service
+  datasource:
+    # Banco PRÓPRIO do serviço (um banco por serviço). Reaproveita, por padrão, as credenciais do authentication_service
+    # (IDENTITY_DB_USER/IDENTITY_DB_PASSWORD) na mesma instância PostgreSQL; sobrescreva com GRAPH_DB_* se quiser um role próprio.
+    url: ${GRAPH_DB_URL:jdbc:postgresql://localhost:5432/${GRAPH_DB_NAME:social_graph}}
+    username: ${GRAPH_DB_USER:${IDENTITY_DB_USER:social_graph}}
+    password: ${GRAPH_DB_PASSWORD:${IDENTITY_DB_PASSWORD:}}
+  flyway:
+    enabled: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: simple
+    listener:
+      simple:
+        default-requeue-rejected: false     # falhou após as tentativas -> fila de mensagens mortas (DLQ)
+        retry:
+          enabled: true
+          max-attempts: 5
+          initial-interval: 1s
+          multiplier: 2
+
+server:
+  port: ${SERVER_PORT:8083}
+  forward-headers-strategy: framework
+  error:
+    include-message: never
+    include-stacktrace: never
+
+management:
+  health:
+    rabbit:
+      enabled: false     # o serviço continua útil sem o broker (o outbox acumula); não derrube a readiness por isso
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# Outbox/inbox/RabbitMQ compartilhados (libs/socialflux-events).
+socialflux:
+  events:
+    enabled: ${GRAPH_EVENTS_ENABLED:true}
+    exchange: ${EVENTS_EXCHANGE:socialflux.events}
+    relay-interval: ${GRAPH_OUTBOX_INTERVAL:PT0.5S}
+
+graph:
+  security:
+    # JWKS do authentication_service (chave pública). O serviço NUNCA conhece a chave privada.
+    jwks-uri: ${AUTH_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+    issuer: ${JWT_ISSUER:http://localhost:8080}
+    audience: ${JWT_AUDIENCE:socialflux-api}
+    clock-skew: ${JWT_CLOCK_SKEW:PT60S}
+  # Origens permitidas em métodos não seguros. Vazio = a própria origem (via X-Forwarded-*).
+  allowed-origins: ${GRAPH_ALLOWED_ORIGINS:}
+  limits:
+    follow-actions-per-hour: ${GRAPH_FOLLOW_RATE_PER_HOUR:60}
+    max-following: ${GRAPH_MAX_FOLLOWING:7500}
+    max-pending-sent: ${GRAPH_MAX_PENDING_SENT:1000}
+  reconciler:
+    # Rede de segurança: recalcula por count(*) os contadores (seguidores, seguidos, pendentes) e corrige os que divergem.
+    enabled: ${GRAPH_RECONCILER_ENABLED:true}
+    interval: ${GRAPH_RECONCILER_INTERVAL:PT1H}
+    batch-size: ${GRAPH_RECONCILER_BATCH:500}

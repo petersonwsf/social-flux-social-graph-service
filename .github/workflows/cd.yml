@@ -1,0 +1,86 @@
+# CD de Social Graph Service: após o merge na main, repete os testes, publica a imagem no GHCR e atualiza a VPS.
+name: CD Social Graph Service
+
+on:
+  push:
+    branches: [ "main" ]
+
+concurrency:
+  group: cd-social_graph_service
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Testes pós-merge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Testes (inclui as libs/* usadas pelo serviço)
+        run: mvn -B -ntp -pl social_graph_service -am test
+
+  publish_ghcr:
+    name: Imagem no GHCR
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # O GHCR exige o nome da imagem em minúsculas.
+      - name: Nome da imagem em minúsculas
+        id: img
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Docker Setup Buildx
+        uses: docker/setup-buildx-action@v3.11.1
+
+      - name: Login no GHCR
+        uses: docker/login-action@v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # O contexto é a RAIZ do repositório: o build inclui as bibliotecas compartilhadas (libs/*).
+      - name: Build and push docker image
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: .
+          file: ./social_graph_service/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.img.outputs.owner }}/social_flux_social_graph_service:latest
+            ghcr.io/${{ steps.img.outputs.owner }}/social_flux_social_graph_service:${{ github.sha }}
+
+  deploy_vps:
+    name: Deploy na VPS
+    runs-on: ubuntu-latest
+    needs: publish_ghcr
+    steps:
+      - name: Atualizar container na VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          script_stop: true
+          script: |
+            cd ${{ secrets.VPS_PROJECT_PATH }}
+            echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            docker compose pull social_graph_service
+            docker compose up -d social_graph_service
+            docker image prune -f
