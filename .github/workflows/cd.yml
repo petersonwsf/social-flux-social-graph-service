@@ -1,4 +1,5 @@
 # CD de Social Graph Service: após o merge na main, repete os testes, publica a imagem no GHCR e atualiza a VPS.
+# Este repositório contém só o serviço; as libs compartilhadas vêm dos repositórios social-flux-lib-*.
 name: CD Social Graph Service
 
 on:
@@ -18,15 +19,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: social_graph_service
+
+      - name: Código da lib socialflux-events
+        uses: actions/checkout@v4
+        with:
+          repository: petersonwsf/social-flux-lib-events
+          path: libs/socialflux-events
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
           cache: maven
+          cache-dependency-path: "**/pom.xml"
 
-      - name: Testes (inclui as libs/* usadas pelo serviço)
-        run: mvn -B -ntp -pl social_graph_service -am test
+      # As libs compartilhadas são dependências Maven: instaladas no repositório local antes do serviço.
+      - name: Instalar as libs compartilhadas
+        run: |
+          mvn -B -ntp -q -DskipTests -f libs/socialflux-events/pom.xml install
+
+      - name: Testes
+        run: mvn -B -ntp -f social_graph_service/pom.xml test
 
   publish_ghcr:
     name: Imagem no GHCR
@@ -37,6 +52,18 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: social_graph_service
+
+      - name: Código da lib socialflux-events
+        uses: actions/checkout@v4
+        with:
+          repository: petersonwsf/social-flux-lib-events
+          path: libs/socialflux-events
+
+      # O Dockerfile espera o layout do monorepo (libs/* e social_graph_service/ lado a lado) com a raiz como contexto.
+      - name: Ignorar .git e target no contexto
+        run: printf '**/.git\n**/target\n' > .dockerignore
 
       # O GHCR exige o nome da imagem em minúsculas.
       - name: Nome da imagem em minúsculas
@@ -53,7 +80,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # O contexto é a RAIZ do repositório: o build inclui as bibliotecas compartilhadas (libs/*).
       - name: Build and push docker image
         uses: docker/build-push-action@v6.18.0
         with:
