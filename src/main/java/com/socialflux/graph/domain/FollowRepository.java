@@ -106,34 +106,46 @@ public class FollowRepository {
 
     // ------------------------------------------------------------------ listas (paginadas por cursor)
 
-    /** Quem segue {@code userId} (mais recentes primeiro). */
-    public List<Edge> followers(UUID userId, Cursor cursor, int limit) {
-        return edges("follow", "followee_id", "follower_id", userId, cursor, limit);
+    /**
+     * Quem segue {@code userId} (mais recentes primeiro). {@code likePattern}, se informado, filtra por username ou nome
+     * (padrão {@code ILIKE} já com os curingas e o escape {@code \} aplicados por quem chama).
+     */
+    public List<Edge> followers(UUID userId, String likePattern, Cursor cursor, int limit) {
+        return edges("follow", "followee_id", "follower_id", userId, likePattern, cursor, limit);
     }
 
-    /** Quem {@code userId} segue (mais recentes primeiro). */
-    public List<Edge> following(UUID userId, Cursor cursor, int limit) {
-        return edges("follow", "follower_id", "followee_id", userId, cursor, limit);
+    /** Quem {@code userId} segue (mais recentes primeiro); {@code likePattern} como em {@link #followers}. */
+    public List<Edge> following(UUID userId, String likePattern, Cursor cursor, int limit) {
+        return edges("follow", "follower_id", "followee_id", userId, likePattern, cursor, limit);
     }
 
     /** Solicitações RECEBIDAS por {@code userId}: o outro lado é quem pediu para seguir. */
     public List<Edge> receivedRequests(UUID userId, Cursor cursor, int limit) {
-        return edges("follow_request", "target_id", "requester_id", userId, cursor, limit);
+        return edges("follow_request", "target_id", "requester_id", userId, null, cursor, limit);
     }
 
     /** Solicitações ENVIADAS por {@code userId}: o outro lado é a conta privada que ele quer seguir. */
     public List<Edge> sentRequests(UUID userId, Cursor cursor, int limit) {
-        return edges("follow_request", "requester_id", "target_id", userId, cursor, limit);
+        return edges("follow_request", "requester_id", "target_id", userId, null, cursor, limit);
     }
 
-    /** Os nomes de tabela/coluna são constantes internas (nunca vêm do cliente). */
-    private List<Edge> edges(String table, String ownerColumn, String otherColumn, UUID owner, Cursor cursor, int limit) {
+    /**
+     * Os nomes de tabela/coluna são constantes internas (nunca vêm do cliente); o texto da busca só entra como parâmetro
+     * vinculado.
+     */
+    private List<Edge> edges(String table, String ownerColumn, String otherColumn, UUID owner, String likePattern,
+                             Cursor cursor, int limit) {
         String sql = "select " + USER_COLUMNS + ", t.created_at as at from " + table + " t "
                 + "join user_snapshot u on u.user_id = t." + otherColumn + " "
                 + "where t." + ownerColumn + " = :owner and u.status = 'ACTIVE' "
+                + (likePattern == null ? ""
+                : "and (u.username ilike :pattern escape '\\' or u.display_name ilike :pattern escape '\\') ")
                 + (cursor == null ? "" : "and (t.created_at, t." + otherColumn + ") < (:at, :id) ")
                 + "order by t.created_at desc, t." + otherColumn + " desc limit :limit";
         JdbcClient.StatementSpec spec = jdbc.sql(sql).param("owner", owner).param("limit", limit);
+        if (likePattern != null) {
+            spec = spec.param("pattern", likePattern);
+        }
         if (cursor != null) {
             spec = spec.param("at", cursor.at()).param("id", cursor.id());
         }

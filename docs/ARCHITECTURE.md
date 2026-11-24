@@ -107,7 +107,7 @@ social_graph_service/
 | --- | --- |
 | `FollowFlowTest` | Seguir/solicitar/aceitar/recusar/cancelar/remover, idempotência, contadores, validações, só UUID na URL, ator sem perfil, eventos no outbox sem dado pessoal |
 | `SecurityTest` | Sem token/audiência errada/expirado/serviço, IDOR em cada rota, ator só do token, `privado` do banco, listas de conta privada, CSRF, usuário inexistente |
-| `ListsTest` | Paginação por cursor (ordem, sem repetição, estável com inserção), solicitações por direção, em comum |
+| `ListsTest` | Paginação por cursor (ordem, sem repetição, estável com inserção), busca por username/nome nas listas (entre páginas, caixa, curingas como texto, limite de tamanho, privacidade), solicitações por direção, em comum |
 | `ProfileSyncTest` | Cópia local por eventos (duplicado, antigo, desconhecido), privado→público aceita pendentes, exclusão de conta, túmulo |
 | `ConcurrencyTest` | Seguidas paralelas do mesmo par, seguir × deixar de seguir, pedidos × virar pública, seguir × exclusão |
 | `LimitsTest` / `RateLimitTest` | Limites de seguidos/pendentes e de ações por hora (429) |

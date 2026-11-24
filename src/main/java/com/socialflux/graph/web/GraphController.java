@@ -107,15 +107,17 @@ public class GraphController {
     }
 
     @GetMapping("/{usuario}/seguidores")
-    PageView followers(@PathVariable String usuario, @RequestParam(required = false) String cursor,
-                       @RequestParam(required = false) Integer limite, @AuthenticationPrincipal Jwt jwt) {
-        return PageView.of(graph.followers(actor(jwt), UserRef.parse(usuario), cursor, limite));
+    PageView followers(@PathVariable String usuario, @RequestParam(required = false) String busca,
+                       @RequestParam(required = false) String cursor, @RequestParam(required = false) Integer limite,
+                       @AuthenticationPrincipal Jwt jwt) {
+        return PageView.of(graph.followers(actor(jwt), UserRef.parse(usuario), busca, cursor, limite));
     }
 
     @GetMapping("/{usuario}/seguidos")
-    PageView following(@PathVariable String usuario, @RequestParam(required = false) String cursor,
-                       @RequestParam(required = false) Integer limite, @AuthenticationPrincipal Jwt jwt) {
-        return PageView.of(graph.following(actor(jwt), UserRef.parse(usuario), cursor, limite));
+    PageView following(@PathVariable String usuario, @RequestParam(required = false) String busca,
+                       @RequestParam(required = false) String cursor, @RequestParam(required = false) Integer limite,
+                       @AuthenticationPrincipal Jwt jwt) {
+        return PageView.of(graph.following(actor(jwt), UserRef.parse(usuario), busca, cursor, limite));
     }
 
     @GetMapping("/{usuario}/em-comum")
