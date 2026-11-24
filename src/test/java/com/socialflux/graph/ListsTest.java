@@ -98,6 +98,57 @@ class ListsTest extends AbstractGraphTest {
     }
 
     @Test
+    void searchFiltersFollowersAndFollowingByUsernameOrNameAcrossPages() throws InterruptedException {
+        TestUser star = newUser();
+        List<TestUser> followers = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            TestUser f = newUser();
+            follow(f, star);
+            follow(star, f);
+            followers.add(f);
+            Thread.sleep(5);
+        }
+        TestUser alvo = followers.get(0);   // o mais antigo: cairia só na última página sem a busca
+        String trecho = alvo.username.substring(3, 9).toUpperCase();   // maiúsculas: a busca ignora caixa
+
+        Response seguidores = get(star, "/api/relacoes/" + star.path() + "/seguidores?limite=2&busca=" + trecho);
+        Response seguidos = get(star, "/api/relacoes/" + star.path() + "/seguidos?limite=2&busca=" + trecho);
+
+        assertThat(usernames(seguidores, "usuario")).containsExactly(alvo.username);
+        assertThat(seguidores.json().get("proximoCursor")).isNull();
+        assertThat(usernames(seguidos, "usuario")).containsExactly(alvo.username);
+        // "Pessoa <username>" é o nome de exibição: buscar por ele também acha
+        assertThat(usernames(get(star, "/api/relacoes/" + star.path() + "/seguidores?busca=Pessoa%20" + alvo.username),
+                "usuario")).containsExactly(alvo.username);
+        // busca em branco = sem filtro
+        assertThat(usernames(get(star, "/api/relacoes/" + star.path() + "/seguidores?busca=%20"), "usuario")).hasSize(4);
+    }
+
+    @Test
+    void searchTreatsLikeWildcardsAsPlainTextAndRejectsLongTerms() {
+        TestUser star = newUser();
+        follow(newUser(), star);
+
+        assertThat(usernames(get(star, "/api/relacoes/" + star.path() + "/seguidores?busca=%25"), "usuario")).isEmpty();
+        assertThat(usernames(get(star, "/api/relacoes/" + star.path() + "/seguidores?busca=_"), "usuario")).isEmpty();
+        assertThat(get(star, "/api/relacoes/" + star.path() + "/seguidores?busca=" + "a".repeat(61)).status())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void searchDoesNotBypassThePrivacyOfPrivateAccounts() {
+        TestUser priv = newUser(true);
+        TestUser follower = newUser();
+        follow(follower, priv);
+        accept(priv, follower);
+        TestUser stranger = newUser();
+
+        Response response = get(stranger, "/api/relacoes/" + priv.path() + "/seguidores?busca=" + follower.username);
+
+        assertThat(response.status()).isEqualTo(403);
+    }
+
+    @Test
     void requestListsAreSeparatedByDirectionAndPrivateToTheirOwner() {
         TestUser priv = newUser(true);
         TestUser priv2 = newUser(true);

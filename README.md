@@ -36,7 +36,7 @@ Todas exigem token de usuário. Nenhuma tem corpo. Erros: `{ "mensagem", "sucess
 | `DELETE /seguidores/{usuario}` | Tirar um seguidor da **minha** lista. `204` |
 | `GET /{usuario}/estado` | `{ estado: "NENHUM"\|"SOLICITADO"\|"SEGUINDO", segueVoce, solicitouVoce }` |
 | `GET /{usuario}/contagens` | `{ seguidores, seguidos }` (visível a qualquer logado) |
-| `GET /{usuario}/seguidores?cursor=&limite=` · `GET /{usuario}/seguidos?...` | Lista paginada (mais recentes primeiro). **Conta privada: só o dono e quem a segue**; os demais recebem `403 conta_privada` |
+| `GET /{usuario}/seguidores?busca=&cursor=&limite=` · `GET /{usuario}/seguidos?...` | Lista paginada (mais recentes primeiro). **Conta privada: só o dono e quem a segue**; os demais recebem `403 conta_privada`. `busca` (opcional, até 60 caracteres; mais: `400 parametro_invalido`) filtra por **username ou nome**, sem diferenciar maiúsculas (`ILIKE '%texto%'`; `%`, `_` e `\` valem como texto), entre **todos** os itens e não só os já carregados; vazio ou só espaços = sem filtro. A privacidade é checada antes da busca |
 | `GET /{usuario}/em-comum?limite=` | Quem eu sigo e também segue `{usuario}`: `{ itens, total }` (D6: qualquer logado) |
 | `GET /solicitacoes?cursor=&limite=` | Solicitações **recebidas** por mim, com o `total` de pendentes (o número real, não o tamanho da página): `{ itens, proximoCursor, total }` |
 | `GET /solicitacoes/enviadas?cursor=&limite=` | Solicitações que **eu enviei** |
@@ -129,6 +129,8 @@ mvn -pl social_graph_service -am test      # na raiz; compila a biblioteca de ev
 
 ## Limites conhecidos
 
+- A busca nas listas (`busca`) usa `ILIKE` sobre as arestas do usuário: sem índice de trigramas e sem ignorar acentos
+  (exigiria as extensões `pg_trgm`/`unaccent` e uma migração). Para contas com centenas de milhares de seguidores, avalie isso.
 - A **revogação imediata** (logout geral, troca de senha) é aplicada pelo gateway (`forward_auth`); este serviço só valida
   assinatura/validade do JWT (até 2 h). Não o exponha sem o gateway.
 - Rate limit em memória (1 instância).

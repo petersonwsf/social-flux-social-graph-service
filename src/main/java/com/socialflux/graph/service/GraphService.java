@@ -26,6 +26,8 @@ public class GraphService {
 
     public static final int DEFAULT_PAGE = 20;
     public static final int MAX_PAGE = 100;
+    /** Tamanho máximo do texto de busca nas listas (o username tem até 60 caracteres). */
+    public static final int MAX_SEARCH = 60;
 
     /** Estado da relação do usuário logado com outro usuário. */
     public enum RelationState { NENHUM, SOLICITADO, SEGUINDO }
@@ -153,18 +155,23 @@ public class GraphService {
         return follows.counts(resolveActive(ref, false).userId());
     }
 
-    /** Seguidores de {@code ref}. Conta privada: só o dono e quem a segue. */
+    /**
+     * Seguidores de {@code ref}. Conta privada: só o dono e quem a segue. {@code search} (opcional) filtra por username ou
+     * nome; a privacidade é checada antes, então a busca nunca revela quem o chamador não poderia listar.
+     */
     @Transactional(readOnly = true)
-    public Page followers(UUID viewerId, UserRef ref, String cursor, Integer limit) {
+    public Page followers(UUID viewerId, UserRef ref, String search, String cursor, Integer limit) {
         UserSnapshot target = resolveListable(viewerId, ref);
-        return page(follows.followers(target.userId(), Cursor.decode(cursor), pageSize(limit) + 1), pageSize(limit));
+        return page(follows.followers(target.userId(), likePattern(search), Cursor.decode(cursor), pageSize(limit) + 1),
+                pageSize(limit));
     }
 
-    /** Quem {@code ref} segue. Mesma regra de privacidade dos seguidores. */
+    /** Quem {@code ref} segue. Mesma regra de privacidade e de busca dos seguidores. */
     @Transactional(readOnly = true)
-    public Page following(UUID viewerId, UserRef ref, String cursor, Integer limit) {
+    public Page following(UUID viewerId, UserRef ref, String search, String cursor, Integer limit) {
         UserSnapshot target = resolveListable(viewerId, ref);
-        return page(follows.following(target.userId(), Cursor.decode(cursor), pageSize(limit) + 1), pageSize(limit));
+        return page(follows.following(target.userId(), likePattern(search), Cursor.decode(cursor), pageSize(limit) + 1),
+                pageSize(limit));
     }
 
     /** Quem o usuário logado segue e também segue {@code ref} (D6: qualquer usuário logado pode ver). */
@@ -249,6 +256,21 @@ public class GraphService {
             throw ApiException.badRequest("parametro_invalido", "O limite deve estar entre 1 e " + MAX_PAGE);
         }
         return limit;
+    }
+
+    /**
+     * Texto da busca -> padrão {@code ILIKE '%texto%'} com {@code \}, {@code %} e {@code _} escapados (viram texto literal).
+     * Vazio ou só espaços = sem filtro (null).
+     */
+    private static String likePattern(String search) {
+        if (search == null || search.isBlank()) {
+            return null;
+        }
+        String term = search.strip();
+        if (term.length() > MAX_SEARCH) {
+            throw ApiException.badRequest("parametro_invalido", "A busca deve ter no máximo " + MAX_SEARCH + " caracteres");
+        }
+        return "%" + term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
     }
 
     /** Recebe {@code size + 1} itens: o excedente indica que há próxima página e define o cursor. */
