@@ -2,6 +2,7 @@ package com.socialflux.graph.service;
 
 import com.socialflux.graph.config.GraphProperties;
 import com.socialflux.graph.domain.FollowRepository;
+import com.socialflux.events.logging.CorrelationId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -58,10 +59,12 @@ public class CounterReconciler {
         if (!properties.enabled()) {
             return;
         }
-        try {
-            reconcile();
-        } catch (RuntimeException e) {
-            log.warn("Reconciliador de contadores falhou (tentará de novo na próxima rodada): {}", e.toString());
+        try (CorrelationId.Scope ignored = CorrelationId.open(null)) {   // cada rodada ganha o próprio id nos logs
+            try {
+                reconcile();
+            } catch (RuntimeException e) {
+                log.warn("Reconciliador de contadores falhou (tentará de novo na próxima rodada): {}", e.toString());
+            }
         }
     }
 

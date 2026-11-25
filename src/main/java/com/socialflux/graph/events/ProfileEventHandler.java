@@ -25,6 +25,6 @@ public class ProfileEventHandler {
 
     public void handle(String json) {
         EventEnvelope event = EventEnvelope.parse(mapper, json);
-        inbox.once(event.id(), () -> sync.apply(event));
+        inbox.once(event, () -> sync.apply(event));
     }
 }

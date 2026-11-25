@@ -1,5 +1,7 @@
 package com.socialflux.graph.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.socialflux.events.EventIds;
 import com.socialflux.events.Outbox;
 import com.socialflux.graph.domain.FollowRepository;
@@ -27,6 +29,8 @@ import java.util.UUID;
 @Component
 @Transactional(propagation = Propagation.MANDATORY)
 public class FollowWriter {
+
+    private static final Logger log = LoggerFactory.getLogger(FollowWriter.class);
 
     public static final String ORIGIN_DIRECT = "DIRECT";
     public static final String ORIGIN_REQUEST_ACCEPTED = "REQUEST_ACCEPTED";
@@ -59,6 +63,7 @@ public class FollowWriter {
         follows.addCounts(followee, 1, 0, 0);
         follows.addCounts(follower, 0, 1, 0);
         outbox.add(FOLLOW_CREATED, relationId, 1, edgeData(relationId, follower, followee, "origin", origin, at));
+        log.info("Usuário {} passou a seguir {} (origem {})", follower, followee, origin);
     }
 
     /** Cria a solicitação {@code requester -> target} (conta privada). */
@@ -70,6 +75,7 @@ public class FollowWriter {
         Map<String, Object> data = requestData(requestId, requester, target);
         data.put("requestedAt", at.toInstant().toString());
         outbox.add(FOLLOW_REQUESTED, requestId, 1, data);
+        log.info("Solicitação de {} para seguir {} criada", requester, target);
     }
 
     /** Remove a aresta. Devolve {@code false} se ela não existia. */
@@ -82,6 +88,7 @@ public class FollowWriter {
         follows.addCounts(follower, 0, -1, 0);
         outbox.add(FOLLOW_REMOVED, removed.get(), 1,
                 edgeData(removed.get(), follower, followee, "reason", reason, null));
+        log.info("Usuário {} deixou de seguir {} (motivo {})", follower, followee, reason);
         return true;
     }
 
@@ -113,6 +120,7 @@ public class FollowWriter {
         }
         follows.addCounts(target, 0, 0, -1);
         outbox.add(eventType, request.get(), 1, requestData(request.get(), requester, target));
+        log.info("Solicitação de {} para {} encerrada ({})", requester, target, eventType);
         return true;
     }
 

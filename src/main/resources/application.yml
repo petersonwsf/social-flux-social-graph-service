@@ -69,3 +69,15 @@ graph:
     enabled: ${GRAPH_RECONCILER_ENABLED:true}
     interval: ${GRAPH_RECONCILER_INTERVAL:PT1H}
     batch-size: ${GRAPH_RECONCILER_BATCH:500}
+
+logging:
+  pattern:
+    # Id de correlação (libs/socialflux-events) em cada linha do console de desenvolvimento. Em container o log sai em JSON
+    # (LOGGING_STRUCTURED_FORMAT_CONSOLE=logstash, definido no Dockerfile) para o Loki, com o campo `correlationId`.
+    correlation: "[%X{correlationId:-}] "
+  level:
+    com.socialflux: ${LOG_LEVEL:INFO}
+  structured:
+    json:
+      add:
+        service: ${spring.application.name}
