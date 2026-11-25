@@ -18,6 +18,9 @@ WORKDIR /app
 COPY --from=build /build/social_graph_service/target/social-graph-service-*.jar app.jar
 USER app
 
+# Logs em JSON no stdout (um objeto por linha): é o que o Alloy lê e envia ao Loki. No terminal do host fica texto legível.
+ENV LOGGING_STRUCTURED_FORMAT_CONSOLE=logstash
+
 EXPOSE 8083
 HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=5 \
   CMD wget -qO- http://localhost:8083/actuator/health >/dev/null || exit 1
