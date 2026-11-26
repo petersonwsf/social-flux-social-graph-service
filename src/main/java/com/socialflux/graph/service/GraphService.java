@@ -1,5 +1,7 @@
 package com.socialflux.graph.service;
 
+import com.socialflux.audit.AuditEntry;
+import com.socialflux.audit.AuditRecorder;
 import com.socialflux.graph.config.GraphProperties;
 import com.socialflux.graph.domain.Cursor;
 import com.socialflux.graph.domain.Edge;
@@ -53,14 +55,16 @@ public class GraphService {
     private final FollowWriter writer;
     private final RateLimiter rateLimiter;
     private final GraphProperties.Limits limits;
+    private final AuditRecorder audit;
 
     public GraphService(SnapshotRepository snapshots, FollowRepository follows, FollowWriter writer,
-                        RateLimiter rateLimiter, GraphProperties properties) {
+                        RateLimiter rateLimiter, GraphProperties properties, AuditRecorder audit) {
         this.snapshots = snapshots;
         this.follows = follows;
         this.writer = writer;
         this.rateLimiter = rateLimiter;
         this.limits = properties.limits();
+        this.audit = audit;
     }
 
     // ------------------------------------------------------------------ escrita
@@ -113,7 +117,9 @@ public class GraphService {
     public void removeFollower(UUID actorId, UserRef ref) {
         UserSnapshot follower = resolveAny(ref, ApiException.notFound("usuario_nao_encontrado", "Usuário não encontrado"));
         follows.lockPair(follower.userId(), actorId);
-        writer.removeFollow(follower.userId(), actorId, FollowWriter.REASON_REMOVED_BY_FOLLOWEE);
+        if (writer.removeFollow(follower.userId(), actorId, FollowWriter.REASON_REMOVED_BY_FOLLOWEE)) {
+            audit.inTransaction(AuditEntry.success("FOLLOWER_REMOVED").actor(actorId).target("USER", follower.userId()));
+        }
     }
 
     /** O usuário logado (alvo) aceita a solicitação de {@code ref}. Só existe solicitação DIRIGIDA a ele. */
@@ -124,6 +130,8 @@ public class GraphService {
         if (!writer.acceptRequest(requester.userId(), actorId, FollowWriter.ORIGIN_REQUEST_ACCEPTED)) {
             throw requestNotFound();
         }
+        audit.inTransaction(AuditEntry.success("FOLLOW_REQUEST_APPROVED").actor(actorId)
+                .target("USER", requester.userId()));
     }
 
     /** O usuário logado (alvo) recusa a solicitação de {@code ref}. */
@@ -134,6 +142,8 @@ public class GraphService {
         if (!writer.rejectRequest(requester.userId(), actorId)) {
             throw requestNotFound();
         }
+        audit.inTransaction(AuditEntry.success("FOLLOW_REQUEST_REJECTED").actor(actorId)
+                .target("USER", requester.userId()));
     }
 
     // ------------------------------------------------------------------ leitura

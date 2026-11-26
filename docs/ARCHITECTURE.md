@@ -10,7 +10,7 @@ configuração: [`../README.md`](../README.md). Plano e decisões: [`../../docs/
 web (GraphController, Dtos, ApiError/ApiException, GlobalExceptionHandler)
   └─► service (GraphService = regras · FollowWriter = transições + contadores + eventos · ProfileSyncService = cópia local)
         ├─► domain (SnapshotRepository, FollowRepository — JdbcClient) ─► PostgreSQL
-        └─► Outbox ─► OutboxRelay ─► RabbitMQ ─┬─► post_service (cópia das arestas: feed e privacidade)   (libs/socialflux-events)
+        └─► Outbox ─► OutboxRelay ─► RabbitMQ ─┬─► post_service (cópia das arestas: feed e privacidade)   (libs/socialflux-events; auditoria: libs/socialflux-audit → audit_outbox → audit-service)
                                                └─► outros consumidores (futuro: notificações)
 events/ProfileEventsListener ◄─ RabbitMQ (profile.#) ─► ProfileEventHandler (inbox) ─► ProfileSyncService
 security (JwtDecoder via JWKS, JwtAuthorities, OriginCheckFilter, SecurityConfig) envolve tudo.
@@ -20,7 +20,7 @@ security (JwtDecoder via JWKS, JwtAuthorities, OriginCheckFilter, SecurityConfig
 
 ```
 social_graph_service/
-├── Dockerfile                    build Maven multi-stage (contexto = raiz do repo, para incluir libs/socialflux-events); runtime Temurin 21 JRE, usuário sem root
+├── Dockerfile                    build Maven multi-stage (contexto = raiz do repo, para incluir libs/socialflux-events e libs/socialflux-audit); runtime Temurin 21 JRE, usuário sem root
 ├── .gitignore                    exclui target/, data/ e arquivos de IDE
 ├── pom.xml                       dependências (Spring Boot 4.1, Security/Resource Server, JDBC, Flyway, AMQP, socialflux-events; testes: embedded-postgres)
 ├── README.md                     rotas, regras, eventos, configuração
@@ -61,7 +61,7 @@ social_graph_service/
 
 | Arquivo | O que representa |
 | --- | --- |
-| `GraphService.java` | Regras: seguir/solicitar, deixar de seguir/cancelar, remover seguidor, aceitar/recusar, estado, contagens, listas (privacidade), em comum, limites |
+| `GraphService.java` | Regras: seguir/solicitar, deixar de seguir/cancelar, remover seguidor, aceitar/recusar, estado, contagens, listas (privacidade), em comum, limites; aprovar/recusar solicitação e remover seguidor gravam a auditoria na mesma transação (seguir/deixar de seguir não) |
 | `FollowWriter.java` | Transições de estado: muda as tabelas, ajusta os contadores e grava o evento no outbox, na mesma transação |
 | `ProfileSyncService.java` | Aplica `profile.*` na cópia local; aceita pendentes quando a conta vira pública; apaga o grafo de contas excluídas |
 | `RateLimiter.java` | Limite de ações por usuário em janela deslizante, em memória |
@@ -100,6 +100,7 @@ social_graph_service/
 | `application.yml` | Propriedades ligadas às variáveis de ambiente |
 | `db/migration/V1__social_graph.sql` | `user_snapshot`, `follow`, `follow_request`, `follow_stats`, `outbox_event`, `processed_message` e os índices das listas por cursor |
 | `db/migration/V2__remove_legacy_id.sql` | Remove `user_snapshot.legacy_id`: as rotas aceitam só UUID |
+| `db/migration/V3__audit_outbox.sql` | Tabela `audit_outbox` (auditoria central: eventos pendentes de envio ao audit-service, com tentativas e falhas) |
 
 ## Testes (`src/test`)
 
@@ -108,6 +109,7 @@ social_graph_service/
 | `FollowFlowTest` | Seguir/solicitar/aceitar/recusar/cancelar/remover, idempotência, contadores, validações, só UUID na URL, ator sem perfil, eventos no outbox sem dado pessoal |
 | `SecurityTest` | Sem token/audiência errada/expirado/serviço, IDOR em cada rota, ator só do token, `privado` do banco, listas de conta privada, CSRF, usuário inexistente |
 | `ListsTest` | Paginação por cursor (ordem, sem repetição, estável com inserção), busca por username/nome nas listas (entre páginas, caixa, curingas como texto, limite de tamanho, privacidade), solicitações por direção, em comum |
+| `AuditTest` | Auditoria central: aprovar/recusar solicitação e remover seguidor; seguir, deixar de seguir e operações sem efeito não geram evento |
 | `ProfileSyncTest` | Cópia local por eventos (duplicado, antigo, desconhecido), privado→público aceita pendentes, exclusão de conta, túmulo |
 | `ConcurrencyTest` | Seguidas paralelas do mesmo par, seguir × deixar de seguir, pedidos × virar pública, seguir × exclusão |
 | `LimitsTest` / `RateLimitTest` | Limites de seguidos/pendentes e de ações por hora (429) |

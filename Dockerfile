@@ -6,6 +6,9 @@ WORKDIR /build
 COPY libs/socialflux-events/pom.xml libs/socialflux-events/pom.xml
 COPY libs/socialflux-events/src libs/socialflux-events/src
 RUN mvn -q -B -f libs/socialflux-events/pom.xml -DskipTests install
+COPY libs/socialflux-audit/pom.xml libs/socialflux-audit/pom.xml
+COPY libs/socialflux-audit/src libs/socialflux-audit/src
+RUN mvn -q -B -f libs/socialflux-audit/pom.xml -DskipTests install
 COPY social_graph_service/pom.xml social_graph_service/pom.xml
 RUN mvn -q -B -f social_graph_service/pom.xml dependency:go-offline
 COPY social_graph_service/src social_graph_service/src

@@ -50,6 +50,12 @@ socialflux:
     enabled: ${GRAPH_EVENTS_ENABLED:true}
     exchange: ${EVENTS_EXCHANGE:socialflux.events}
     relay-interval: ${GRAPH_OUTBOX_INTERVAL:PT0.5S}
+  # Auditoria central (libs/socialflux-audit): os eventos vão para a outbox local e um relay os envia ao audit-service.
+  audit:
+    enabled: ${AUDIT_ENABLED:false}
+    url: ${AUDIT_URL:http://audit-service:8090}
+    api-key: ${AUDIT_API_KEY:}
+    service-name: graph
 
 graph:
   security:
