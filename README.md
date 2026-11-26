@@ -113,6 +113,24 @@ Testes (PostgreSQL real embutido, JWKS local e JWT RS256 de verdade; sem Docker)
 mvn -pl social_graph_service -am test      # na raiz; compila a biblioteca de eventos junto
 ```
 
+## Auditoria central
+
+Eventos de auditoria (quem fez o quê, em quê, quando e de onde) vão para o **audit-service** (aplicação `social-flux`, serviço
+`graph`) pela biblioteca `libs/socialflux-audit`: cada evento é gravado na tabela `audit_outbox` **na mesma transação da
+ação** (ou em transação própria, quando precisa sobreviver a um rollback) e um relay o envia em lote. Se o audit-service cair,
+os eventos esperam na outbox. Com `AUDIT_ENABLED=false` (padrão) o envio fica desligado.
+
+| Ação | Quando | Detalhe (`detail`) |
+| --- | --- | --- |
+| `FOLLOW_REQUEST_APPROVED` | o dono da conta privada aceita uma solicitação | alvo: o usuário aceito (`targetType=USER`) |
+| `FOLLOW_REQUEST_REJECTED` | o dono recusa uma solicitação | alvo: o usuário recusado |
+| `FOLLOWER_REMOVED` | o usuário tira um seguidor da própria lista (só se o vínculo existia) | alvo: o seguidor removido |
+
+Nunca vão para a auditoria: texto, e-mail, telefone, data de nascimento nem o conteúdo editado; só UUIDs, nomes de campos e
+categorias. O IP e o user agent da requisição seguem junto (só para o audit-service, nunca para o log).
+
+Seguir e deixar de seguir **não** são auditados (alto volume e já cobertos pelos eventos `follow.*`).
+
 ## Logs e rastreabilidade
 
 - Toda requisição carrega o `X-Correlation-Id` (o gateway cria; o `CorrelationIdFilter` de `libs/socialflux-events` o põe no MDC e o devolve na resposta) e gera uma linha de acesso (`Requisição GET /caminho respondeu 200 em 12 ms`, sem query string; health checks e `/internal/auth/verify` ficam em DEBUG). O mesmo id vai nos eventos publicados e é retomado por quem os consome, então um fluxo inteiro (ex.: cadastro → perfil → notificações) se acompanha pelo Loki/Grafana procurando o `correlationId`.
@@ -128,6 +146,7 @@ mvn -pl social_graph_service -am test      # na raiz; compila a biblioteca de ev
 | `AUTH_JWKS_URI` | JWKS do authentication_service (só a chave **pública**) |
 | `JWT_ISSUER`, `JWT_AUDIENCE` | Validação do token de usuário |
 | `RABBITMQ_HOST/PORT/USER/PASSWORD`, `EVENTS_EXCHANGE`, `GRAPH_EVENTS_ENABLED`, `GRAPH_OUTBOX_INTERVAL` | Broker e eventos |
+| `AUDIT_ENABLED`, `AUDIT_URL`, `AUDIT_API_KEY` | Auditoria central: liga o envio, URL do audit-service (`http://audit-service:8090`, rede `audit-net`) e a chave da aplicação `social-flux` (segredo, só no `.env`) |
 | `GRAPH_FOLLOW_RATE_PER_HOUR`, `GRAPH_MAX_FOLLOWING`, `GRAPH_MAX_PENDING_SENT` | Limites antiabuso (D8) |
 | `GRAPH_RECONCILER_ENABLED`, `GRAPH_RECONCILER_INTERVAL`, `GRAPH_RECONCILER_BATCH` | Reconciliador de contadores: liga/desliga (padrão ligado), intervalo ISO-8601 (`PT1H`) e usuários por rodada (500) |
 | `GRAPH_ALLOWED_ORIGINS` | Origens aceitas em métodos não seguros (vazio = a própria origem) |

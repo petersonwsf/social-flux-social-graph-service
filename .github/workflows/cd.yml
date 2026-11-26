@@ -28,6 +28,12 @@ jobs:
           repository: petersonwsf/social-flux-lib-events
           path: libs/socialflux-events
 
+      - name: Código da lib socialflux-audit
+        uses: actions/checkout@v4
+        with:
+          repository: petersonwsf/social-flux-lib-audit
+          path: libs/socialflux-audit
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -39,6 +45,7 @@ jobs:
       - name: Instalar as libs compartilhadas
         run: |
           mvn -B -ntp -q -DskipTests -f libs/socialflux-events/pom.xml install
+          mvn -B -ntp -q -DskipTests -f libs/socialflux-audit/pom.xml install
 
       - name: Testes
         run: mvn -B -ntp -f social_graph_service/pom.xml test
@@ -60,6 +67,12 @@ jobs:
         with:
           repository: petersonwsf/social-flux-lib-events
           path: libs/socialflux-events
+
+      - name: Código da lib socialflux-audit
+        uses: actions/checkout@v4
+        with:
+          repository: petersonwsf/social-flux-lib-audit
+          path: libs/socialflux-audit
 
       # O Dockerfile espera o layout do monorepo (libs/* e social_graph_service/ lado a lado) com a raiz como contexto.
       - name: Ignorar .git e target no contexto
